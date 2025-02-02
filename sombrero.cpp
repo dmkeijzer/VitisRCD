@@ -74427,7 +74427,8 @@ unsigned int sombrero_data[] = {
     0x00000000,
     0x00000000,
     0x00000000,
-    0x00000000 0x00000000,
+    0x00000000,
+	0x00000000,
     0x00000000,
     0x00000000,
     0x00000000,
@@ -75010,5 +75011,5 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
 
 void stream(pixel_stream &src, pixel_stream &dst, int frame)
 {
-    sombrero_overlay(src, dst, 3, 2, 300, 300, 400, 400);
+    gray_scaling(src, dst, 3, 2, 300, 300, 400, 400);
 }
