@@ -74427,8 +74427,7 @@ unsigned int sombrero_data[] = {
     0x00000000,
     0x00000000,
     0x00000000,
-    0x00000000,
-    0x00000000,
+    0x00000000 0x00000000,
     0x00000000,
     0x00000000,
     0x00000000,
@@ -74906,19 +74905,24 @@ unsigned int sombrero_bmp_int_len = 74880;
 // 1: RGB grayscaling with down sampling
 // 2: RGB grayscaling (no "data loss")
 
-void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t x_start, uint32_t y_start)
+void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t speed,
+                  uint32_t x_start, uint32_t y_start, uint32_t x_end, uint32_t y_end)
 {
 #pragma HLS INTERFACE ap_ctrl_none port = return
 #pragma HLS INTERFACE axis port = src
 #pragma HLS INTERFACE axis port = dst
 #pragma HLS INTERFACE s_axilite port = mask
+#pragma HLS INTERFACE s_axilite port = speed
 #pragma HLS INTERFACE s_axilite port = x_start
 #pragma HLS INTERFACE s_axilite port = y_start
+#pragma HLS_INTERFACE s_axilite port = x_end
+#pragma HLS_INTERFACE s_axilite port = y_end
 #pragma HLS PIPELINE II = 1
 
     // Data to be stored across 'function calls'
     static uint16_t x = 0;
     static uint16_t y = 0;
+    static int frame = 0;
 
     pixel_data p;
 
@@ -74929,6 +74933,7 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
     {
         x = 0;
         y = 0;
+        frame += (speed + 1);
     }
 
     ////////////////////////////////////////
@@ -74961,6 +74966,33 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
         p.data = (p.data & 0xFF000000) | (gray_byte << 16) | (gray_byte << 8) |
                  gray_byte;
     }
+    // Rotate sombrero
+    else if (mask == 3)
+    {
+        float angle = (frame % 360) * (3.1415 / 180.0); // Convert to radians
+        float cos_a = cos(angle);
+        float sin_a = sin(angle);
+
+        int center_x = (x_end + x_start) / 2;
+        int center_y = (y_end + y_start) / 2;
+        int x_offset = x - center_x;
+        int y_offset = y - center_y;
+        int x_rot = cos_a * x_offset - sin_a * y_offset;
+        int y_rot = sin_a * x_offset + cos_a * y_offset;
+
+        int x_mapped = x_rot + (BMP_WIDTH / 2);
+        int y_mapped = y_rot + (BMP_WIDTH / 2);
+
+        if (x_mapped >= 0 && y_mapped >= 0 && x_mapped < BMP_WIDTH &&
+            x_mapped + y_mapped * BMP_WIDTH <= sombrero_bmp_int_len)
+        {
+            if (sombrero_data[x_mapped + y_mapped * BMP_WIDTH] != 0)
+            {
+                p.data = sombrero_data[x_mapped + y_mapped * BMP_WIDTH];
+                p.data = ~(p.data & 0x00FFFFFF) | (p.data & 0xFF000000); // Invert RGB
+            }
+        }
+    }
 
     dst << p;
 
@@ -74978,5 +75010,5 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
 
 void stream(pixel_stream &src, pixel_stream &dst, int frame)
 {
-    gray_scaling(src, dst, 0, 100, 100);
+    sombrero_overlay(src, dst, 3, 2, 300, 300, 400, 400);
 }
