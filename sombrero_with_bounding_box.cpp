@@ -74901,12 +74901,18 @@ unsigned int sombrero_data[] = {
 
 unsigned int sombrero_bmp_int_len = 74880;
 
+bool in(int a, int b, int c)
+{
+    return ((a <= b) && (b <= c));
+}
+
 // Mask values:
 // 0: No grayscaling
 // 1: RGB grayscaling with down sampling
 // 2: RGB grayscaling (no "data loss")
 
-void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t x_start, uint32_t y_start)
+void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask,
+                  uint32_t x_start, uint32_t y_start, uint32_t x_end, uint32_t y_end)
 {
 #pragma HLS INTERFACE ap_ctrl_none port = return
 #pragma HLS INTERFACE axis port = src
@@ -74914,6 +74920,8 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
 #pragma HLS INTERFACE s_axilite port = mask
 #pragma HLS INTERFACE s_axilite port = x_start
 #pragma HLS INTERFACE s_axilite port = y_start
+#pragma HLS_INTERFACE s_axilite port = x_end
+#pragma HLS_INTERFACE s_axilite port = y_end
 #pragma HLS PIPELINE II = 1
 
     // Data to be stored across 'function calls'
@@ -74939,44 +74947,65 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
         int y_offset = y - y_start;
         if (x_offset >= 0 && y_offset >= 0)
         {
-            if (x_offset < BMP_WIDTH && x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len)
+            if (x_offset < BMP_WIDTH &&
+                x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len)
             {
                 if (sombrero_data[x_offset + y_offset * BMP_WIDTH] != 0)
                 {
                     p.data = sombrero_data[x_offset + y_offset * BMP_WIDTH];
-                    p.data = ~(p.data & 0x00FFFFFF) | (p.data & 0xFF000000); // invert only the RGB channels
+                    p.data = ~(p.data & 0x00FFFFFF) |
+                             (p.data & 0xFF000000); // invert only the RGB channels
                 }
             }
         }
     }
-    // Grayscaling
+    // Add bounding box
     else if (mask == 2)
     {
-        float green = GG(p.data) / 255.0;
-        float red = GR(p.data) / 255.0;
-        float blue = GB(p.data) / 255.0;
-
-        float gray = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-        uint8_t gray_byte = static_cast<uint8_t>(gray * 255);
-        p.data = (p.data & 0xFF000000) | (gray_byte << 16) | (gray_byte << 8) |
-                 gray_byte;
+        if (in(-3, x - x_start, 3) && in(y_start, y, y_end))
+        {
+            p.data = 0xFF04F404;
+        }
+        if (in(-3, x - x_end, 3) && in(y_start, y, y_end))
+        {
+            p.data = 0xFF04F404;
+        }
+        if (in(-3, y - y_start, 3) && in(x_start, x, x_end))
+        {
+            p.data = 0xFF04F404;
+        }
+        if (in(-3, y - y_end, 3) && in(x_start, x, x_end))
+        {
+            p.data = 0xFF04F404;
+        }
+        int x_offset = x - x_start;
+        int y_offset = y - y_start;
+        if (x_offset >= 0 && y_offset >= 0)
+        {
+            if (x_offset < BMP_WIDTH &&
+                x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len)
+            {
+                if (sombrero_data[x_offset + y_offset * BMP_WIDTH] != 0)
+                {
+                    p.data = sombrero_data[x_offset + y_offset * BMP_WIDTH];
+                    p.data = ~(p.data & 0x00FFFFFF) |
+                             (p.data & 0xFF000000); // invert only the RGB channels
+                }
+            }
+        }
     }
 
     dst << p;
-
     // Increment X and Y counters
-    if (p.last)
-    {
+    if (p.last) {
         x = 0;
         y++;
-    }
-    else
-    {
+    } else  {
         x++;
     }
 }
 
 void stream(pixel_stream &src, pixel_stream &dst, int frame)
 {
-    gray_scaling(src, dst, 0, 100, 100);
+    gray_scaling(src, dst, 1, 100, 100, 200, 200);
 }
