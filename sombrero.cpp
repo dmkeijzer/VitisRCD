@@ -74919,6 +74919,7 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
     // Data to be stored across 'function calls'
     static uint16_t x = 0;
     static uint16_t y = 0;
+    static uint16_t frame = 0;
 
     pixel_data p;
 
@@ -74929,14 +74930,16 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
     {
         x = 0;
         y = 0;
+        frame = (frame + 1) % 360;
     }
+    int x_offset = x - x_start;
+    int y_offset = y - y_start;
 
     ////////////////////////////////////////
-    // No effect
+    // NORMAL MODE - SOMBRERO
     if (mask == 0)
     {
-        int x_offset = x - x_start;
-        int y_offset = y - y_start;
+
         if (x_offset >= 0 && y_offset >= 0)
         {
             if (x_offset < BMP_WIDTH && x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len)
@@ -74950,17 +74953,30 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
         }
         dst << p;
     }
-    // Grayscaling with no down sampling
+    // PARTYYY MODDEEE
     if ((mask & 1) > 0)
     {
-        float green = GG(p.data) / 255.0;
-        float red = GR(p.data) / 255.0;
-        float blue = GB(p.data) / 255.0;
+        // Compute rotation angle based on frame
+        float angle = (frame * (M_PI / 180.0)); // Convert to radians
+        float cos_a = cos(angle);
+        float sin_a = sin(angle);
 
-        float gray = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-        uint8_t gray_byte = static_cast<uint8_t>(gray * 255);
-        p.data = (p.data & 0xFF000000) | (gray_byte << 16) | (gray_byte << 8) |
-                 gray_byte;
+        int x_rot = cos_a * x_offset - sin_a * y_offset;
+        int y_rot = sin_a * x_offset + cos_a * y_offset;
+
+        int x_mapped = x_rot + (BMP_WIDTH / 2);
+        int y_mapped = y_rot + (BMP_WIDTH / 2);
+
+        if (x_mapped >= 0 && y_mapped >= 0 && x_mapped < BMP_WIDTH &&
+            x_mapped + y_mapped * BMP_WIDTH <= sombrero_bmp_int_len)
+        {
+            if (sombrero_data[x_mapped + y_mapped * BMP_WIDTH] != 0)
+            {
+                p.data = sombrero_data[x_mapped + y_mapped * BMP_WIDTH];
+                p.data = ~(p.data & 0x00FFFFFF) | (p.data & 0xFF000000); // Invert RGB
+            }
+        }
+
         dst << p;
     }
 
@@ -74978,5 +74994,5 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
 
 void stream(pixel_stream &src, pixel_stream &dst, int frame)
 {
-    gray_scaling(src, dst, 0, 100, 100);
+    gray_scaling(src, dst, 1, 250, 250);
 }
