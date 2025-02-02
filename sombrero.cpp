@@ -74973,7 +74973,7 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
             if (sombrero_data[x_mapped + y_mapped * BMP_WIDTH] != 0)
             {
                 p.data = sombrero_data[x_mapped + y_mapped * BMP_WIDTH];
-                p.data = ~(p.data & 0x00FFFFFF) | (p.data & 0xFF000000); // Invert RGB
+                p.data = ~((p.data & 0x00FF0000) | ((p.data & 0x0000FF00) >> 8) | ((p.data & 0x000000FF) << 8)) | (p.data & 0xFF000000); // Invert RGB
             }
         }
 
