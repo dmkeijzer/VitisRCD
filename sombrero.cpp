@@ -2,7 +2,6 @@
 #include <hls_stream.h>
 #include <math.h>
 #include <stdint.h>
-#include <cmath>
 
 typedef ap_axiu<32, 1, 1, 1> pixel_data;
 typedef hls::stream<pixel_data> pixel_stream;
@@ -12512,85 +12511,82 @@ bool in(int a,int b,int c){
 // 1: RGB grayscaling with down sampling
 // 2: RGB grayscaling (no "data loss")
 
-
-void sombrero_overlay(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t  speed,
+void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask,
                   uint32_t x_start, uint32_t y_start, uint32_t x_end, uint32_t y_end) {
-#pragma HLS INTERFACE ap_ctrl_none port=return
-#pragma HLS INTERFACE axis port=src
-#pragma HLS INTERFACE axis port=dst
-#pragma HLS INTERFACE s_axilite port=mask
-#pragma HLS INTERFACE s_axilite port=speed
-#pragma HLS INTERFACE s_axilite port=x_start
-#pragma HLS INTERFACE s_axilite port=y_start
-#pragma HLS INTERFACE s_axilite port=x_end
-#pragma HLS INTERFACE s_axilite port=y_end
-#pragma HLS PIPELINE II=1
+#pragma HLS INTERFACE ap_ctrl_none port = return
+#pragma HLS INTERFACE axis port = src
+#pragma HLS INTERFACE axis port = dst
+#pragma HLS INTERFACE s_axilite port = mask
+#pragma HLS INTERFACE s_axilite port = x_start
+#pragma HLS INTERFACE s_axilite port = y_start
+#pragma HLS_INTERFACE s_axilite port = x_end
+#pragma HLS_INTERFACE s_axilite port = y_end
+#pragma HLS PIPELINE II = 1
 
+  // Data to be stored across 'function calls'
   static uint16_t x = 0;
   static uint16_t y = 0;
-  static int frame = 0;  // Persistent frame counter
 
   pixel_data p;
+
+  // Load pixel data from source
   src >> p;
 
-  // Update X and Y coordinates on new user frame
-  if (p.user) {
-    x = 0;
-    y = 0;
-
-    // Auto-increment the frame only when rotation is enabled
-    if (mask & 0x8) {
-      frame = (frame + 1*speed) % 360;
-    }
+  if (p.user){
+	  x = 0;
+	  y = 0;
   }
 
-  // Compute rotation angle based on frame
-  float angle = (frame * (M_PI / 180.0)); // Convert to radians
-  float cos_a = cos(angle);
-  float sin_a = sin(angle);
-
-  int center_x = (x_end + x_start) / 2;
-  int center_y = (y_end + y_start) / 2;
-
-  if (mask & 1) {
-    if (in(-3, x - x_start, 3) && in(y_start, y, y_end)) {
-      p.data = 0xFF04F404;
-    }
-    if (in(-3, x - x_end, 3) && in(y_start, y, y_end)) {
-      p.data = 0xFF04F404;
-    }
-    if (in(-3, y - y_start, 3) && in(x_start, x, x_end)) {
-      p.data = 0xFF04F404;
-    }
-    if (in(-3, y - y_end, 3) && in(x_start, x, x_end)) {
-      p.data = 0xFF04F404;
-    }
-
-    int x_offset = x - center_x;
-    int y_offset = y - center_y;
-
-    int x_rot = x_offset;
-    int y_rot = y_offset;
-
-    if (mask & 0x8) {
-      x_rot = cos_a * x_offset - sin_a * y_offset;
-      y_rot = sin_a * x_offset + cos_a * y_offset;
-    }
-
-    int x_mapped = x_rot + (BMP_WIDTH / 2);
-    int y_mapped = y_rot + (BMP_WIDTH / 2);
-
-    if (x_mapped >= 0 && y_mapped >= 0 && x_mapped < BMP_WIDTH &&
-        x_mapped + y_mapped * BMP_WIDTH <= sombrero_bmp_int_len) {
-      if (sombrero_data[x_mapped + y_mapped * BMP_WIDTH] != 0) {
-        p.data = sombrero_data[x_mapped + y_mapped * BMP_WIDTH];
-        p.data = ~(p.data & 0x00FFFFFF) | (p.data & 0xFF000000); // Invert RGB
+  ////////////////////////////////////////
+  // No effect
+  if (mask == 0) {
+    int x_offset = x - x_start;
+    int y_offset = y - y_start;
+    if (x_offset >= 0 && y_offset >= 0) {
+      if (x_offset < BMP_WIDTH &&
+          x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len) {
+        if (sombrero_data[x_offset + y_offset * BMP_WIDTH] != 0) {
+          p.data = sombrero_data[x_offset + y_offset * BMP_WIDTH];
+          p.data = ~(p.data & 0x00FFFFFF) |
+                   (p.data & 0xFF000000); // invert only the RGB channels
+        }
       }
     }
+    dst << p;
+  }
+  // Add bounding box
+  else if(mask == 1) {
+	  if (in(-3,x-x_start,3) && in(y_start,y,y_end)){
+		  p.data = 0xFF04F404;
+	  }
+	  if (in(-3,x-x_end,3) && in(y_start,y,y_end)){
+		  p.data = 0xFF04F404;
+	  }
+	  if (in(-3,y-y_start,3) && in(x_start,x,x_end)){
+		  p.data = 0xFF04F404;
+	  }
+	  if (in(-3,y-y_end,3) && in(x_start,x, x_end)){
+		  p.data = 0xFF04F404;
+	  }
+	  int x_offset = x - x_start;
+	      int y_offset = y - y_start;
+	      if (x_offset >= 0 && y_offset >= 0) {
+	        if (x_offset < BMP_WIDTH &&
+	            x_offset + y_offset * BMP_WIDTH <= sombrero_bmp_int_len) {
+	          if (sombrero_data[x_offset + y_offset * BMP_WIDTH] != 0) {
+	            p.data = sombrero_data[x_offset + y_offset * BMP_WIDTH];
+	            p.data = ~(p.data & 0x00FFFFFF) |
+	                     (p.data & 0xFF000000); // invert only the RGB channels
+	          }
+	        }
+	      }
+	      dst << p;
+
+
   }
 
-  dst << p;
 
+  // Increment X and Y counters
   if (p.last) {
     x = 0;
     y++;
@@ -12600,6 +12596,7 @@ void sombrero_overlay(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint3
 }
 
 
+
 void stream(pixel_stream &src, pixel_stream &dst, int frame) {
-  sombrero_overlay(src, dst, 9, 3, 300, 300, 400,400);
+  gray_scaling(src, dst, 1, 100, 100, 200,200);
 }
