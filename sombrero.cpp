@@ -74967,13 +74967,52 @@ void gray_scaling(pixel_stream &src, pixel_stream &dst, uint32_t mask, uint32_t 
         int x_mapped = x_rot + (BMP_WIDTH / 2);
         int y_mapped = y_rot + (BMP_WIDTH / 2);
 
+        int index = x_mapped + y_mapped * BMP_WIDTH;
+
         if (x_mapped >= 0 && y_mapped >= 0 && x_mapped < BMP_WIDTH &&
-            x_mapped + y_mapped * BMP_WIDTH <= sombrero_bmp_int_len)
+            index < sombrero_bmp_int_len)
         {
-            if (sombrero_data[x_mapped + y_mapped * BMP_WIDTH] != 0)
+            if (sombrero_data[index] != 0)
             {
-                p.data = sombrero_data[x_mapped + y_mapped * BMP_WIDTH];
-                p.data = ~((p.data & 0x00FF0000) | ((p.data & 0x0000FF00) >> 8) | ((p.data & 0x000000FF) << 8)) | (p.data & 0xFF000000); // Invert RGB
+                p.data = sombrero_data[index];
+                p.data = ~((p.data & 0x00FF0000) |
+                           ((p.data & 0x0000FF00) >> 8) |
+                           ((p.data & 0x000000FF) << 8)) |
+                         (p.data & 0xFF000000);
+
+                const float tint_factor = 0.3f;
+                int hue_channel = frame % 3;
+
+                uint8_t a = (p.data >> 24) & 0xFF;
+                uint8_t r = (p.data >> 16) & 0xFF;
+                uint8_t g = (p.data >> 8) & 0xFF;
+                uint8_t b = p.data & 0xFF;
+
+                float new_r, new_g, new_b;
+                if (hue_channel == 0) // Red
+                {
+                    new_r = (1.0f - tint_factor) * r + tint_factor * 255.0f;
+                    new_g = (1.0f - tint_factor) * g;
+                    new_b = (1.0f - tint_factor) * b;
+                }
+                else if (hue_channel == 1) // Blue
+                {
+                    new_r = (1.0f - tint_factor) * r;
+                    new_g = (1.0f - tint_factor) * g;
+                    new_b = (1.0f - tint_factor) * b + tint_factor * 255.0f;
+                }
+                else if (hue_channel == 2) // Green
+                {
+                    new_r = (1.0f - tint_factor) * r;
+                    new_g = (1.0f - tint_factor) * g + tint_factor * 255.0f;
+                    new_b = (1.0f - tint_factor) * b;
+                }
+
+                uint8_t final_r = static_cast<uint8_t>(std::min(255.0f, new_r));
+                uint8_t final_g = static_cast<uint8_t>(std::min(255.0f, new_g));
+                uint8_t final_b = static_cast<uint8_t>(std::min(255.0f, new_b));
+
+                p.data = (a << 24) | (final_r << 16) | (final_g << 8) | final_b;
             }
         }
 
